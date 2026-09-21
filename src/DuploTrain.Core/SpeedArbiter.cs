@@ -81,25 +81,90 @@ public sealed class SpeedArbiter
         _everWritten = false;
     }
 
-    /// <summary>Decide whether a write is due, and consume it if so.</summary>
+    /// <summary>Decide whether a write is due, and consume it if so.
+    ///
+    /// Emits the next step of the ramp rather than the request itself, so a
+    /// caller that keeps asking gets a sequence of powers that walks toward the
+    /// target at the configured rate.</summary>
     public bool TryTakeWrite(out sbyte power)
     {
-        power = (sbyte)_requested;
+        var target = _requested;
 
-        if (_everWritten && _requested == _lastWritten)
+        // Stopping is a safety action: immediate, never ramped. The rate limit
+        // exists to protect the link from throttle chatter, not to delay the one
+        // command that matters most.
+        if (target == 0)
+        {
+            if (_everWritten && _lastWritten == 0)
+            {
+                power = 0;
+                return false;
+            }
+
+            return Commit(0, out power);
+        }
+
+        if (_everWritten && _lastWritten == target)
+        {
+            power = (sbyte)_lastWritten;
             return false;
+        }
 
-        // Stopping is a safety action and always goes out immediately; the rate
-        // limit exists to protect the link from throttle chatter, not to delay
-        // the one command that matters most.
-        var stopping = _requested == 0;
-        if (_everWritten && !stopping && _time.GetElapsedTime(_lastWriteAt) < MinWriteInterval)
+        var elapsed = _everWritten ? _time.GetElapsedTime(_lastWriteAt) : MinWriteInterval;
+        if (_everWritten && elapsed < MinWriteInterval)
+        {
+            power = (sbyte)_lastWritten;
             return false;
+        }
 
-        _lastWritten = _requested;
+        // Cap the ramp allowance at one write interval. Writes only happen while
+        // the value is changing, so after holding a steady throttle the gap
+        // since the last write can be seconds - and an uncapped allowance would
+        // grant a jump straight to the target, silently defeating the ramp in
+        // the most common case of all.
+        var allowance = elapsed > MinWriteInterval ? MinWriteInterval : elapsed;
+
+        return Commit(Slew(_everWritten ? _lastWritten : 0, target, allowance), out power);
+    }
+
+    private bool Commit(int value, out sbyte power)
+    {
+        _lastWritten = value;
         _lastWriteAt = _time.GetTimestamp();
         _everWritten = true;
+        power = (sbyte)value;
         return true;
+    }
+
+    /// <summary>One step of the ramp from the current power toward the target.</summary>
+    internal int Slew(int from, int to, TimeSpan elapsed)
+    {
+        // A reversal goes through rest rather than slamming from forward power
+        // straight into reverse power.
+        if (from != 0 && Math.Sign(to) != Math.Sign(from)) return 0;
+
+        if (from == 0 && _options.MinPower > 0)
+        {
+            // Break away at the lowest power that actually moves. Ramping up
+            // from zero would spend the first part of the ramp inside the
+            // motor's deadband, humming, and then lurch.
+            return Math.Abs(to) <= _options.MinPower
+                ? to
+                : Math.Sign(to) * _options.MinPower;
+        }
+
+        var rate = Math.Abs(to) > Math.Abs(from)
+            ? _options.AccelerationPerSecond
+            : _options.DecelerationPerSecond;
+
+        if (rate <= 0) return to;
+
+        // At least one unit per write, so a slow ramp still converges instead of
+        // rounding to a standstill.
+        var maxDelta = Math.Max(1, (int)Math.Round(rate * elapsed.TotalSeconds));
+        var delta = to - from;
+
+        return Math.Abs(delta) <= maxDelta ? to : from + Math.Sign(delta) * maxDelta;
     }
 
     /// <summary>Deadzone, then map the remaining travel onto the range of powers

@@ -20,6 +20,23 @@ public sealed class MotionOptions
     /// tired batteries need more. Set to 0 for the raw, unmapped range.</summary>
     public int MinPower { get; set; } = 30;
 
+    /// <summary>How fast power may rise, in power units per second.
+    ///
+    /// A train that jumps straight to full power spins its wheels and can pull
+    /// off the track, so power is slewed toward the request rather than applied
+    /// at once. The ramp starts at <see cref="MinPower"/>, not zero: creeping up
+    /// through the deadband would just hum and then lurch.
+    ///
+    /// Set to 0 to apply power immediately.</summary>
+    public int AccelerationPerSecond { get; set; } = 60;
+
+    /// <summary>How fast power may fall, in power units per second. Higher than
+    /// acceleration by default, because slowing down should feel prompt.
+    ///
+    /// This never applies to a stop: releasing the throttle and pressing stop
+    /// both take effect immediately, ramp or no ramp.</summary>
+    public int DecelerationPerSecond { get; set; } = 120;
+
     /// <summary>Power added or removed per keyboard step.</summary>
     public int Step { get; set; } = 10;
 
@@ -52,6 +69,12 @@ public sealed class MotionOptions
         if (MinPower > MaxSpeed)
             throw new ArgumentException(
                 $"MinPower ({MinPower}) must not exceed MaxSpeed ({MaxSpeed})");
+        if (AccelerationPerSecond is < 0 or > 1000)
+            throw new ArgumentOutOfRangeException(nameof(AccelerationPerSecond),
+                AccelerationPerSecond, "must be 0..1000");
+        if (DecelerationPerSecond is < 0 or > 1000)
+            throw new ArgumentOutOfRangeException(nameof(DecelerationPerSecond),
+                DecelerationPerSecond, "must be 0..1000");
         if (Step is < 1 or > 100)
             throw new ArgumentOutOfRangeException(nameof(Step), Step, "must be 1..100");
         if (Deadzone is < 0 or >= 1)
