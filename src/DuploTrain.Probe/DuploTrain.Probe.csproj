@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>duplo-probe</AssemblyName>
+    <RootNamespace>DuploTrain.Probe</RootNamespace>
+
+    <!-- Dictated by SharpBrick.PoweredUp.WinRT, which targets exactly this. -->
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+
+    <!-- Required to cross-build a Windows target from Linux; without it the
+         build fails at restore with NETSDK1100. -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <!-- Deliberately not PublishTrimmed: SharpBrick resolves devices through DI
+         and reflection, and trim failures would only surface at runtime on a
+         machine we cannot iterate on. -->
+
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="SharpBrick.PoweredUp" Version="5.0.2" />
+    <PackageReference Include="SharpBrick.PoweredUp.WinRT" Version="5.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="8.0.0" />
+  </ItemGroup>
+
+</Project>

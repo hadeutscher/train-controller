@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Deliberately plain net8.0, not a Windows TFM. Everything worth testing
+         lives here so it can be built AND run on the Linux dev VM; the WinRT
+         bluetooth adapter and the input devices are the only Windows-only
+         pieces and they live in DuploTrain.Windows. -->
+    <TargetFramework>net8.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- SharpBrick.PoweredUp itself is netstandard2.1/net8.0 and fully portable;
+         only SharpBrick.PoweredUp.WinRT is Windows-only. -->
+    <PackageReference Include="SharpBrick.PoweredUp" Version="5.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.0" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <!-- The dev VM ships only the .NET 10 runtime, so the net8.0 testhost must
+         be allowed to roll forward. Keeps the tests runnable wherever they land
+         instead of pinning the box to an exact runtime. -->
+    <RollForward>LatestMajor</RollForward>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+    <!-- FakeTimeProvider: lets the rate-limit and backoff rules be tested
+         deterministically instead of with sleeps. -->
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" Version="8.10.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/DuploTrain.Core/DuploTrain.Core.csproj" />
+  </ItemGroup>
+
+</Project>
