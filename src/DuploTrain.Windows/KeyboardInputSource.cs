@@ -62,11 +62,7 @@ public sealed class KeyboardInputSource : IInputSource
 
         // Console.ReadKey blocks, so this owns a thread of its own rather than
         // occupying a thread-pool slot for the life of the process.
-        return Task.Factory.StartNew(
-            () => Loop(sink, cancellationToken),
-            cancellationToken,
-            TaskCreationOptions.LongRunning,
-            TaskScheduler.Default);
+        return InputThread.Run("duplo-keyboard", () => Loop(sink, cancellationToken));
     }
 
     private void Loop(IInputSink sink, CancellationToken cancellationToken)

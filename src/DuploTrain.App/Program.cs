@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using DuploTrain.Core.Config;
 using DuploTrain.Windows;
 using Microsoft.Extensions.Configuration;
@@ -6,7 +7,15 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-var builder = Host.CreateApplicationBuilder(args);
+// Content root must be the directory the dll lives in, not the working
+// directory. The default is Directory.GetCurrentDirectory(), so running
+// `dotnet C:\somewhere\duplo-train.dll` from a home directory would silently
+// ignore the appsettings.json sitting next to the dll and use code defaults.
+var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
+{
+    Args = args,
+    ContentRootPath = AppContext.BaseDirectory,
+});
 
 builder.Logging.ClearProviders();
 builder.Logging.AddSimpleConsole(o =>
@@ -43,4 +52,18 @@ logger.LogInformation(
     effective.Motion.RateLimitHz, effective.Motion.PollHz);
 
 await host.RunAsync();
+
+// By here the host has stopped cleanly: TrainRunner has braked the motor and
+// disconnected the hub. The process can still refuse to exit, because the
+// WinRT bluetooth stack leaves threads behind that we neither own nor can join,
+// and Ctrl+C then looks like a hang.
+//
+// Disposing the host first flushes the console logger's queue, so nothing is
+// lost. After that there is genuinely nothing left to wait for, so terminate
+// rather than blocking on somebody else's thread.
+logger.LogDebug("exiting with {Threads} os threads alive",
+    Process.GetCurrentProcess().Threads.Count);
+
+host.Dispose();
+Environment.Exit(0);
 return 0;

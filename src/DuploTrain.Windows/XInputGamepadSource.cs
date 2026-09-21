@@ -101,13 +101,13 @@ public sealed class XInputGamepadSource : IInputSource
         return bindings;
     }
 
-    private bool TryRead(out XInputState state)
+    private uint GetState(uint index, out XInputState state)
     {
         if (!_useLegacyDll)
         {
             try
             {
-                return GetState14(0, out state) == Success;
+                return GetState14(index, out state);
             }
             catch (DllNotFoundException)
             {
@@ -117,15 +117,36 @@ public sealed class XInputGamepadSource : IInputSource
             }
         }
 
-        return GetState910(0, out state) == Success;
+        return GetState910(index, out state);
+    }
+
+    /// <summary>Finds a controller in any of XInput's four user slots.
+    ///
+    /// Slot 0 is not guaranteed: Windows assigns a slot per device and a pad that
+    /// has reconnected, or that shares the machine with another, can land in 1-3.
+    /// Only reading slot 0 makes a perfectly working controller look dead.</summary>
+    private bool TryRead(out XInputState state, ref uint slot)
+    {
+        // Try the slot that worked last time before rescanning.
+        if (slot != uint.MaxValue && GetState(slot, out state) == Success)
+            return true;
+
+        for (uint index = 0; index < 4; index++)
+        {
+            if (GetState(index, out state) != Success) continue;
+
+            if (index != slot) _logger.LogInformation("gamepad found in xinput slot {Slot}", index);
+            slot = index;
+            return true;
+        }
+
+        slot = uint.MaxValue;
+        state = default;
+        return false;
     }
 
     public Task RunAsync(IInputSink sink, CancellationToken cancellationToken)
-        => Task.Factory.StartNew(
-            () => Loop(sink, cancellationToken),
-            cancellationToken,
-            TaskCreationOptions.LongRunning,
-            TaskScheduler.Default);
+        => InputThread.Run("duplo-gamepad", () => Loop(sink, cancellationToken));
 
     private void Loop(IInputSink sink, CancellationToken cancellationToken)
     {
@@ -133,6 +154,8 @@ public sealed class XInputGamepadSource : IInputSource
         var connected = false;
         var previous = PadButton.None;
         var lastAxis = 0.0;
+        var slot = uint.MaxValue;
+        var lastComplaint = DateTimeOffset.MinValue;
 
         _logger.LogInformation(
             "gamepad: right trigger forward, left trigger reverse; {Count} bindings",
@@ -140,7 +163,7 @@ public sealed class XInputGamepadSource : IInputSource
 
         while (!cancellationToken.IsCancellationRequested)
         {
-            if (!TryRead(out var state))
+            if (!TryRead(out var state, ref slot))
             {
                 if (connected)
                 {
@@ -152,6 +175,17 @@ public sealed class XInputGamepadSource : IInputSource
                     sink.SourceLost(Name);
                 }
 
+                // Say so periodically rather than sitting silent: "nothing
+                // happens" is the hardest symptom to diagnose, and silence
+                // cannot be told apart from a source that is not running.
+                if (DateTimeOffset.UtcNow - lastComplaint > TimeSpan.FromSeconds(10))
+                {
+                    lastComplaint = DateTimeOffset.UtcNow;
+                    _logger.LogWarning(
+                        "no xinput controller in any of slots 0-3 - if windows sees the pad, " +
+                        "it may be exposed as a generic hid device rather than an xinput one");
+                }
+
                 Thread.Sleep(poll);
                 continue;
             }
@@ -160,7 +194,8 @@ public sealed class XInputGamepadSource : IInputSource
             {
                 connected = true;
                 previous = PadButton.None;
-                _logger.LogInformation("gamepad connected");
+                lastComplaint = DateTimeOffset.MinValue;
+                _logger.LogInformation("gamepad connected on xinput slot {Slot}", slot);
             }
 
             var axis = (state.Gamepad.RightTrigger - state.Gamepad.LeftTrigger) / 255.0;
