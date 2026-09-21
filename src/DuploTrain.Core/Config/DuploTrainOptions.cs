@@ -70,9 +70,23 @@ public sealed class InputOptions
     }
 }
 
+public enum GamepadBackend
+{
+    /// <summary>Plain XInput exports. The default, because it works from a
+    /// console process with no window or message pump.</summary>
+    XInput,
+
+    /// <summary><c>Windows.Gaming.Input</c>. Nicer API and 0..1 triggers, but in
+    /// a console app it enumerates pads and then reports empty readings, because
+    /// the WinRT input stack expects a window. Kept for a future windowed host.</summary>
+    WindowsGamingInput,
+}
+
 public sealed class GamepadOptions
 {
     public bool Enabled { get; set; } = true;
+
+    public GamepadBackend Backend { get; set; } = GamepadBackend.XInput;
 
     /// <summary>Button name (a <c>GamepadButtons</c> flag) to action. Names are
     /// resolved by the Windows input layer, so this stays portable.</summary>

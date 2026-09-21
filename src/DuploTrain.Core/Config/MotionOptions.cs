@@ -10,6 +10,16 @@ public sealed class MotionOptions
     /// "as fast as allowed" and the whole trigger travel stays useful.</summary>
     public int MaxSpeed { get; set; } = 60;
 
+    /// <summary>Lowest power that actually moves the train.
+    ///
+    /// A DUPLO motor has a sizeable deadband: below roughly 30 it hums and the
+    /// train crawls or does not move at all. Any non-zero request is therefore
+    /// mapped into <see cref="MinPower"/>..<see cref="MaxSpeed"/> rather than
+    /// 0..MaxSpeed, so the first notch and the start of the trigger travel both
+    /// do something useful. Tune it per train and track; heavier loads and
+    /// tired batteries need more. Set to 0 for the raw, unmapped range.</summary>
+    public int MinPower { get; set; } = 30;
+
     /// <summary>Power added or removed per keyboard step.</summary>
     public int Step { get; set; } = 10;
 
@@ -37,6 +47,11 @@ public sealed class MotionOptions
     {
         if (MaxSpeed is < 1 or > 100)
             throw new ArgumentOutOfRangeException(nameof(MaxSpeed), MaxSpeed, "must be 1..100");
+        if (MinPower is < 0 or > 100)
+            throw new ArgumentOutOfRangeException(nameof(MinPower), MinPower, "must be 0..100");
+        if (MinPower > MaxSpeed)
+            throw new ArgumentException(
+                $"MinPower ({MinPower}) must not exceed MaxSpeed ({MaxSpeed})");
         if (Step is < 1 or > 100)
             throw new ArgumentOutOfRangeException(nameof(Step), Step, "must be 1..100");
         if (Deadzone is < 0 or >= 1)

@@ -26,7 +26,17 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ITrainConnector, SharpBrickTrainConnector>();
 
         if (input.Gamepad.Enabled)
-            services.AddSingleton<IInputSource, GamepadInputSource>();
+        {
+            switch (input.Gamepad.Backend)
+            {
+                case GamepadBackend.WindowsGamingInput:
+                    services.AddSingleton<IInputSource, GamepadInputSource>();
+                    break;
+                default:
+                    services.AddSingleton<IInputSource, XInputGamepadSource>();
+                    break;
+            }
+        }
 
         if (input.Keyboard.Enabled)
             services.AddSingleton<IInputSource, KeyboardInputSource>();

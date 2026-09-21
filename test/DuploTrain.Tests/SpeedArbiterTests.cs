@@ -7,10 +7,13 @@ namespace DuploTrain.Tests;
 
 public class SpeedArbiterTests
 {
+    // MinPower defaults to 0 here so the scaling, rate-limit and clear tests
+    // exercise one rule at a time. The deadband mapping has its own tests below.
     private static MotionOptions Options(int maxSpeed = 100, double deadzone = 0.1,
-        int rateLimitHz = 10, int step = 10) => new()
+        int rateLimitHz = 10, int step = 10, int minPower = 0) => new()
     {
         MaxSpeed = maxSpeed,
+        MinPower = minPower,
         Deadzone = deadzone,
         RateLimitHz = rateLimitHz,
         Step = step,
@@ -178,6 +181,79 @@ public class SpeedArbiterTests
         arbiter.RequestAxis(0.4);
         Assert.True(arbiter.TryTakeWrite(out var after));
         Assert.Equal(before, after);
+    }
+
+    // --- the motor deadband ---
+
+    [Fact]
+    public void just_past_the_deadzone_jumps_to_the_lowest_power_that_moves()
+    {
+        var arbiter = new SpeedArbiter(Options(maxSpeed: 60, minPower: 30, deadzone: 0.1));
+
+        arbiter.RequestAxis(0.1001);
+        Assert.Equal(30, arbiter.Requested);
+
+        arbiter.RequestAxis(-0.1001);
+        Assert.Equal(-30, arbiter.Requested);
+    }
+
+    [Fact]
+    public void trigger_travel_maps_across_the_whole_usable_power_range()
+    {
+        var arbiter = new SpeedArbiter(Options(maxSpeed: 60, minPower: 30, deadzone: 0));
+
+        arbiter.RequestAxis(0.5);
+        Assert.Equal(45, arbiter.Requested);
+
+        arbiter.RequestAxis(1.0);
+        Assert.Equal(60, arbiter.Requested);
+    }
+
+    [Fact]
+    public void the_deadzone_still_means_stopped_not_minimum_power()
+    {
+        var arbiter = new SpeedArbiter(Options(maxSpeed: 60, minPower: 30, deadzone: 0.1));
+        arbiter.RequestAxis(0.05);
+        Assert.Equal(0, arbiter.Requested);
+    }
+
+    [Fact]
+    public void the_first_step_from_rest_reaches_a_power_that_moves_the_train()
+    {
+        var arbiter = new SpeedArbiter(Options(maxSpeed: 60, minPower: 30, step: 10));
+
+        arbiter.RequestStep(1);
+        Assert.Equal(30, arbiter.Requested);
+
+        arbiter.RequestStep(1);
+        Assert.Equal(40, arbiter.Requested);
+    }
+
+    [Fact]
+    public void stepping_back_down_through_the_deadband_stops_rather_than_humming()
+    {
+        var arbiter = new SpeedArbiter(Options(maxSpeed: 60, minPower: 30, step: 10));
+
+        arbiter.RequestStep(1);
+        Assert.Equal(30, arbiter.Requested);
+
+        arbiter.RequestStep(-1);
+        Assert.Equal(0, arbiter.Requested);
+    }
+
+    [Fact]
+    public void stepping_down_from_rest_reverses_at_a_power_that_moves()
+    {
+        var arbiter = new SpeedArbiter(Options(maxSpeed: 60, minPower: 30, step: 10));
+        arbiter.RequestStep(-1);
+        Assert.Equal(-30, arbiter.Requested);
+    }
+
+    [Fact]
+    public void min_power_above_the_cap_is_rejected()
+    {
+        Assert.Throws<ArgumentException>(
+            () => new SpeedArbiter(Options(maxSpeed: 20, minPower: 30)));
     }
 
     [Theory]
