@@ -118,11 +118,11 @@ public sealed class KeyboardOptions
 {
     public bool Enabled { get; set; } = true;
 
-    /// <summary>Key name (a <c>ConsoleKey</c>) to action. UpArrow and DownArrow
-    /// are reserved for the throttle steps and ignored here.</summary>
+    /// <summary>Key name (a WinForms <c>Keys</c> value) to action. Up and Down
+    /// are reserved for the throttle steps and cannot be rebound.</summary>
     public Dictionary<string, TrainAction> Keys { get; set; } = new()
     {
-        ["Spacebar"] = TrainAction.Stop,
+        ["Space"] = TrainAction.Stop,
         ["H"] = TrainAction.Horn,
         ["L"] = TrainAction.CycleColor,
         ["W"] = TrainAction.WaterRefill,

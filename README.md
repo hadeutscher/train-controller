@@ -57,13 +57,30 @@ binary, not the working directory, so it does not matter where you run from.
 | Steam | LB | S |
 | Station departure | RB | D |
 
-Keyboard input needs the console window focused — deliberately, so that typing
-`h` in another application does not honk the train. Ctrl+C stops the motor and
-exits.
+Keyboard input needs the app window focused — deliberately, so that typing `h`
+in another application does not honk the train. Closing the window stops the
+motor and exits.
 
-Mouse control is not implemented. On Windows the scroll wheel needs a
-message-only window and a `WM_INPUT` hook, which is disproportionate machinery
-for a third input device.
+Mouse control is not implemented. It would now be possible via `WM_INPUT` on the
+app window, but it remains out of scope by decision.
+
+### Why there is a window
+
+The window is not decoration. Windows routes gamepad navigation at the focused
+window, and when this was a console app a nudge of the stick would walk the
+focus onto the console's own close button, where a button press shut the app
+down mid-run. A real focusable window gives that navigation somewhere harmless
+to land.
+
+Nothing inside the window is keyboard-focusable — the STOP button and the log
+both set `TabStop = false` — because a focusable STOP would simply have made
+stray presses land on the one control that matters most.
+
+This does **not** help if something else is grabbing the controller globally.
+**Steam Input** is the usual culprit: with Steam running, its desktop
+configuration maps the stick to mouse and window switching regardless of which
+window has focus. Xbox Game Bar can do the same. If the pointer still jumps
+around, close Steam before suspecting the app.
 
 ## Configuration
 
@@ -100,7 +117,14 @@ are `Stop`, `Horn`, `Brake`, `StationDeparture`, `WaterRefill`, `Steam`,
 
 Button names use the `Windows.Gaming.Input` spelling — `A`, `B`, `X`, `Y`,
 `LeftShoulder`, `RightShoulder`, `DPadUp`, `Menu`, `View` and so on. Keys are
-`ConsoleKey` names; `UpArrow` and `DownArrow` are reserved for the throttle.
+WinForms `Keys` names — `H`, `L`, `Space`, `W` — and `Up` and `Down` are
+reserved for the throttle.
+
+### Session
+
+| Setting | Default | What it does |
+|---|---|---|
+| `KeepDisplayAwake` | `true` | Stops Windows blanking the display or idle-locking while the app runs. Once locked, the lock screen also receives the gamepad and drives its on-screen keyboard with it, and no user-session process can take that away. Does not prevent an explicit Win+L. |
 
 `Input.Gamepad.Backend` selects `XInput` (default) or `WindowsGamingInput`. Use
 XInput: `Windows.Gaming.Input` enumerates pads in a console app but returns
@@ -150,6 +174,16 @@ does not, it is being exposed as a generic HID device rather than an XInput one.
 **It drives very slowly.** Raise `MinPower`. DUPLO motors have a large deadband
 and a tired battery widens it.
 
+**The controller moves the mouse or switches windows.** Something else is
+grabbing it globally — check for Steam Input first, then Xbox Game Bar. A
+focused window contains gamepad *navigation*, but nothing in user mode can take
+a controller away from another application.
+
+**The app will not close.** Fixed, but worth knowing why: SharpBrick's discovery
+accepts a cancellation token and does not reliably honour it, so stopping while
+scanning used to wait out the host's shutdown timeout. Discovery is now raced
+against the token, the timeout is 5s, and shutdown is bounded.
+
 **The link keeps dropping.** `SharpBrick` raises no event on BLE disconnect, so
 this app detects it with an RSSI heartbeat plus an inbound-traffic watchdog. If
 it fires spuriously, raise `LinkTimeoutMs`. Note that a hub keeps executing its
@@ -168,7 +202,7 @@ $env:Logging__LogLevel__Default="Debug"; dotnet duplo-train.dll
 |---|---|---|
 | `src/DuploTrain.Core` | `net8.0` | Arbiter, config, reconnect, action dispatch. Portable, so it builds and tests off Windows. |
 | `src/DuploTrain.Windows` | `net8.0-windows10.0.19041.0` | WinRT bluetooth adapter and input devices. Adapters only, no decisions. |
-| `src/DuploTrain.App` | `net8.0-windows10.0.19041.0` | Host wiring and `appsettings.json`. |
+| `src/DuploTrain.App` | `net8.0-windows10.0.19041.0` | WinForms window, host wiring and `appsettings.json`. The window is the keyboard source and the status display. |
 | `src/DuploTrain.Probe` | `net8.0-windows10.0.19041.0` | Standalone BLE diagnostic; self-contained, needs no runtime installed. |
 | `test/DuploTrain.Tests` | `net8.0` | Runs anywhere. |
 

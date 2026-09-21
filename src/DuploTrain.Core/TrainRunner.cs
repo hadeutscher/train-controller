@@ -36,15 +36,19 @@ public sealed class TrainRunner : BackgroundService, IInputSink
     private double? _axis;
     private int _steps;
 
+    private readonly IReadOnlyList<IStatusSink> _status;
+
     public TrainRunner(
         ITrainConnector connector,
         IEnumerable<IInputSource> sources,
+        IEnumerable<IStatusSink> status,
         IOptions<DuploTrainOptions> options,
         TimeProvider time,
         ILogger<TrainRunner> logger)
     {
         _connector = connector;
         _sources = sources.ToList();
+        _status = status.ToList();
         _options = options.Value;
         _options.Validate();
         _time = time;
@@ -99,8 +103,10 @@ public sealed class TrainRunner : BackgroundService, IInputSink
             ITrain? train = null;
             try
             {
+                Report(s => s.Connection(false, "connecting"));
                 train = await _connector.ConnectAsync(stoppingToken).ConfigureAwait(false);
                 backoff = TimeSpan.FromMilliseconds(_options.Train.ReconnectInitialMs);
+                Report(s => s.Connection(true, "connected"));
 
                 // Never inherit a setpoint across a connection boundary.
                 _arbiter.Clear();
@@ -126,6 +132,8 @@ public sealed class TrainRunner : BackgroundService, IInputSink
             {
                 if (train is not null) await train.DisposeAsync().ConfigureAwait(false);
                 _arbiter.Clear();
+                Report(s => s.Connection(false, "disconnected"));
+                Report(s => s.Power(0));
             }
 
             if (stoppingToken.IsCancellationRequested) break;
@@ -182,6 +190,7 @@ public sealed class TrainRunner : BackgroundService, IInputSink
             if (_arbiter.TryTakeWrite(out var power))
             {
                 _logger.LogDebug("power {Power}", power);
+                Report(s => s.Power(power));
                 await train.SetPowerAsync(power, cancellationToken).ConfigureAwait(false);
             }
 
@@ -253,6 +262,24 @@ public sealed class TrainRunner : BackgroundService, IInputSink
             {
                 await train.PlaySoundAsync(sound, cancellationToken).ConfigureAwait(false);
                 _logger.LogInformation("sound {Sound}", sound);
+            }
+        }
+    }
+
+    /// <summary>A status display must never be able to break control, so a
+    /// misbehaving sink is logged and ignored rather than allowed to escape
+    /// into the drive loop.</summary>
+    private void Report(Action<IStatusSink> report)
+    {
+        foreach (var sink in _status)
+        {
+            try
+            {
+                report(sink);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "status sink threw");
             }
         }
     }

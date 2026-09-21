@@ -125,7 +125,17 @@ public sealed class SharpBrickTrainConnector(
         DuploTrainBaseHub hub;
         try
         {
-            hub = await host.DiscoverAsync<DuploTrainBaseHub>(timeout.Token).ConfigureAwait(false);
+            var discovery = host.DiscoverAsync<DuploTrainBaseHub>(timeout.Token);
+
+            // SharpBrick's discovery does not reliably return when its token is
+            // cancelled, so racing it against the token is what actually makes
+            // shutdown-while-scanning prompt. The abandoned scan dies with the
+            // process; waiting on it would hang the app instead.
+            var cancelled = Task.Delay(Timeout.Infinite, timeout.Token);
+            if (await Task.WhenAny(discovery, cancelled).ConfigureAwait(false) == cancelled)
+                timeout.Token.ThrowIfCancellationRequested();
+
+            hub = await discovery.ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {

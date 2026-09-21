@@ -1,22 +1,25 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
+    <!-- WinExe, not Exe: the window exists so that Windows' gamepad navigation
+         has a focused window to act on. With only a console, a stray stick nudge
+         walked the focus onto the console's close button. -->
+    <OutputType>WinExe</OutputType>
+    <UseWindowsForms>true</UseWindowsForms>
+
     <AssemblyName>duplo-train</AssemblyName>
     <RootNamespace>DuploTrain.App</RootNamespace>
     <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
 
     <!-- Published thin and run with `dotnet duplo-train.dll`, so no runtime
          identifier and no self-contained bundle. Needs the .NET Desktop Runtime
-         8 on the target: the Windows TFM makes the runtimeconfig require both
-         Microsoft.NETCore.App and Microsoft.WindowsDesktop.App. -->
+         8 on the target. -->
     <SelfContained>false</SelfContained>
     <PublishSingleFile>false</PublishSingleFile>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="8.0.0" />
   </ItemGroup>
 
   <ItemGroup>

@@ -41,9 +41,8 @@ public static class ServiceCollectionExtensions
             }
         }
 
-        if (input.Keyboard.Enabled)
-            services.AddSingleton<IInputSource, KeyboardInputSource>();
-
+        // Keyboard input is the window's job: a focused window receives key
+        // events directly, so there is nothing to poll and nothing to hook.
         services.AddHostedService<TrainRunner>();
 
         return services;
