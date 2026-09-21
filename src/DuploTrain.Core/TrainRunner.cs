@@ -180,7 +180,10 @@ public sealed class TrainRunner : BackgroundService, IInputSink
             await DispatchActionsAsync(train, cancellationToken).ConfigureAwait(false);
 
             if (_arbiter.TryTakeWrite(out var power))
+            {
+                _logger.LogDebug("power {Power}", power);
                 await train.SetPowerAsync(power, cancellationToken).ConfigureAwait(false);
+            }
 
             if (_options.Motion.HeartbeatMs > 0 && _time.GetElapsedTime(lastPoke) >= heartbeat)
             {
@@ -218,12 +221,16 @@ public sealed class TrainRunner : BackgroundService, IInputSink
             if (action == TrainAction.Stop)
             {
                 _arbiter.RequestStop();
-
-                // Consume the resulting zero-power write before braking, so the
-                // drive loop does not immediately follow the brake with a float
-                // and release it.
-                _arbiter.TryTakeWrite(out _);
                 await train.StopAsync(cancellationToken).ConfigureAwait(false);
+
+                // The zero-power write is deliberately NOT consumed here. A
+                // brake is power 127 - an actively held brake, not a state to
+                // leave the motor in - so the next loop iteration writing zero
+                // releases it a few milliseconds later. That makes the stop a
+                // brake pulse followed by a coast, and it keeps the arbiter's
+                // idea of the last written power equal to what the hub is
+                // actually doing. Holding the brake instead locks the wheels
+                // indefinitely and a later gentle throttle may not overcome it.
                 _logger.LogInformation("stop");
                 continue;
             }
