@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Dictated by SharpBrick.PoweredUp.WinRT. Windows.Gaming.Input comes from
+         the same WinRT projection, so the gamepad costs no extra dependency. -->
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="SharpBrick.PoweredUp.WinRT" Version="5.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="8.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../DuploTrain.Core/DuploTrain.Core.csproj" />
+  </ItemGroup>
+
+</Project>
