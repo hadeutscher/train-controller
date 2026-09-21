@@ -53,8 +53,12 @@ What real hardware changed, none of which was predictable from the desk:
 - XInput must be read from **all four user slots**, not slot 0. Windows assigns
   per device and a reconnected pad lands elsewhere.
 - DUPLO motors have a **large deadband**: below ~30 they hum. Power is mapped
-  into `MinPower..MaxSpeed`, and the acceleration ramp starts at the breakaway
-  power rather than zero.
+  into `MinPower..MaxSpeed` so the first notch and the bottom of the trigger
+  travel both do something.
+- A time-based **acceleration ramp was built and then removed**. It felt worse
+  than direct control: with an analog trigger the finger is already the ramp, and
+  a time term makes the throttle mushy. Power is now a pure function of trigger
+  position, and the rate limit governs only how often a value is sent.
 - The host stopped cleanly but the **process would not exit**, because the WinRT
   bluetooth stack leaves threads behind. The app now disposes the host to flush
   logs and then terminates.

@@ -9,19 +9,16 @@ public class SpeedArbiterTests
 {
     // MinPower defaults to 0 here so the scaling, rate-limit and clear tests
     // exercise one rule at a time. The deadband mapping has its own tests below.
-    // Ramping is off by default here so the scaling, rate-limit and clear tests
-    // exercise one rule at a time. It has its own tests below.
+    // MinPower defaults to 0 here so the scaling, rate-limit and clear tests
+    // exercise one rule at a time. The deadband mapping has its own tests below.
     private static MotionOptions Options(int maxSpeed = 100, double deadzone = 0.1,
-        int rateLimitHz = 10, int step = 10, int minPower = 0,
-        int acceleration = 0, int deceleration = 0) => new()
+        int rateLimitHz = 10, int step = 10, int minPower = 0) => new()
     {
         MaxSpeed = maxSpeed,
         MinPower = minPower,
         Deadzone = deadzone,
         RateLimitHz = rateLimitHz,
         Step = step,
-        AccelerationPerSecond = acceleration,
-        DecelerationPerSecond = deceleration,
     };
 
     [Theory]
@@ -37,7 +34,7 @@ public class SpeedArbiterTests
     }
 
     [Fact]
-    public void power_ramps_from_zero_at_the_deadzone_edge_rather_than_jumping()
+    public void power_rises_smoothly_from_the_deadzone_edge_rather_than_jumping()
     {
         var arbiter = new SpeedArbiter(Options(deadzone: 0.1));
 
@@ -261,160 +258,6 @@ public class SpeedArbiterTests
             () => new SpeedArbiter(Options(maxSpeed: 20, minPower: 30)));
     }
 
-    // --- acceleration ramp ---
-
-    private static (SpeedArbiter Arbiter, FakeTimeProvider Time) Ramping()
-    {
-        var time = new FakeTimeProvider();
-        var options = Options(maxSpeed: 60, minPower: 30, deadzone: 0,
-            rateLimitHz: 10, acceleration: 60, deceleration: 120);
-        return (new SpeedArbiter(options, time), time);
-    }
-
-    /// <summary>Drives the arbiter the way TrainRunner does and returns every
-    /// power actually written.</summary>
-    private static List<int> Writes(SpeedArbiter arbiter, FakeTimeProvider time, int ticks)
-    {
-        var written = new List<int>();
-        for (var i = 0; i < ticks; i++)
-        {
-            if (arbiter.TryTakeWrite(out var power)) written.Add(power);
-            time.Advance(TimeSpan.FromMilliseconds(100));
-        }
-
-        return written;
-    }
-
-    [Fact]
-    public void power_ramps_up_instead_of_jumping_to_the_request()
-    {
-        var (arbiter, time) = Ramping();
-        arbiter.RequestAxis(1.0);
-
-        var written = Writes(arbiter, time, 10);
-
-        // Breaks away at MinPower, then climbs at 60/s = 6 per 100ms write.
-        Assert.Equal(30, written[0]);
-        Assert.Equal(36, written[1]);
-        Assert.Equal(42, written[2]);
-        Assert.Equal(60, written[^1]);
-        Assert.True(written.Count > 4, "the ramp should take several writes");
-    }
-
-    [Fact]
-    public void the_ramp_starts_at_the_breakaway_power_not_at_zero()
-    {
-        var (arbiter, time) = Ramping();
-        arbiter.RequestAxis(1.0);
-
-        var written = Writes(arbiter, time, 3);
-
-        // Nothing below MinPower is ever written: those powers only make the
-        // motor hum.
-        Assert.All(written, p => Assert.True(Math.Abs(p) >= 30));
-    }
-
-    [Fact]
-    public void the_ramp_settles_exactly_on_the_target_without_overshooting()
-    {
-        var (arbiter, time) = Ramping();
-        arbiter.RequestAxis(1.0);
-
-        var written = Writes(arbiter, time, 20);
-
-        Assert.Equal(60, written[^1]);
-        Assert.All(written, p => Assert.True(p <= 60));
-    }
-
-    [Fact]
-    public void releasing_the_throttle_stops_immediately_rather_than_ramping_down()
-    {
-        var (arbiter, time) = Ramping();
-        arbiter.RequestAxis(1.0);
-        Writes(arbiter, time, 20);
-
-        arbiter.RequestAxis(0.0);
-        Assert.True(arbiter.TryTakeWrite(out var power));
-        Assert.Equal(0, power);
-    }
-
-    [Fact]
-    public void a_stop_is_never_ramped_even_mid_acceleration()
-    {
-        var (arbiter, time) = Ramping();
-        arbiter.RequestAxis(1.0);
-        Writes(arbiter, time, 3);
-
-        arbiter.RequestStop();
-        Assert.True(arbiter.TryTakeWrite(out var power));
-        Assert.Equal(0, power);
-    }
-
-    [Fact]
-    public void reversing_passes_through_rest_rather_than_slamming_into_reverse()
-    {
-        var (arbiter, time) = Ramping();
-        arbiter.RequestAxis(1.0);
-        Writes(arbiter, time, 20);
-
-        arbiter.RequestAxis(-1.0);
-        Assert.True(arbiter.TryTakeWrite(out var power));
-        Assert.Equal(0, power);
-    }
-
-    [Fact]
-    public void deceleration_between_two_moving_powers_is_ramped()
-    {
-        var (arbiter, time) = Ramping();
-        arbiter.RequestAxis(1.0);
-        Writes(arbiter, time, 20);
-
-        // Axis maps into MinPower..MaxSpeed, so 0.1 is 33, not 6. Coming down
-        // from 60 at 120/s is 12 per 100ms write: 48, 36, then 33.
-        arbiter.RequestAxis(0.1);
-
-        Assert.True(arbiter.TryTakeWrite(out var first));
-        Assert.Equal(48, first);
-
-        time.Advance(TimeSpan.FromMilliseconds(100));
-        Assert.True(arbiter.TryTakeWrite(out var second));
-        Assert.Equal(36, second);
-
-        time.Advance(TimeSpan.FromMilliseconds(100));
-        Assert.True(arbiter.TryTakeWrite(out var third));
-        Assert.Equal(33, third);
-    }
-
-    [Fact]
-    public void a_long_steady_throttle_does_not_bank_up_a_ramp_allowance()
-    {
-        var (arbiter, time) = Ramping();
-        arbiter.RequestAxis(1.0);
-        Writes(arbiter, time, 20);
-
-        // Nothing is written while the throttle sits at the target, so the gap
-        // since the last write grows without bound. That must not translate into
-        // permission to jump.
-        time.Advance(TimeSpan.FromSeconds(30));
-
-        arbiter.RequestAxis(0.1);
-        Assert.True(arbiter.TryTakeWrite(out var power));
-        Assert.Equal(48, power);
-    }
-
-    [Fact]
-    public void zero_acceleration_applies_power_immediately()
-    {
-        var time = new FakeTimeProvider();
-        var arbiter = new SpeedArbiter(
-            Options(maxSpeed: 60, minPower: 0, deadzone: 0, acceleration: 0), time);
-
-        arbiter.RequestAxis(1.0);
-        Assert.True(arbiter.TryTakeWrite(out var power));
-        Assert.Equal(60, power);
-    }
-
-    [Theory]
     [InlineData(0)]
     [InlineData(101)]
     public void an_out_of_range_cap_is_rejected_at_construction(int maxSpeed)

@@ -75,8 +75,6 @@ All of `appsettings.json`, under `DuploTrain`.
 |---|---|---|
 | `MaxSpeed` | 60 | Speed cap, 1–100. The throttle is *scaled* into this range, not clipped, so full trigger always means "as fast as allowed". |
 | `MinPower` | 30 | Lowest power that actually moves the train. Below roughly 30 a DUPLO motor hums and crawls, so any non-zero request maps into `MinPower..MaxSpeed`. Raise it for heavier loads or tired batteries; 0 disables the mapping. |
-| `AccelerationPerSecond` | 60 | Ramp rate when speeding up. 0 applies power instantly. |
-| `DecelerationPerSecond` | 120 | Ramp rate when slowing between two moving powers. Never applies to a stop. |
 | `Step` | 10 | Power per arrow-key press. |
 | `Deadzone` | 0.08 | Trigger travel ignored near rest, 0–1. |
 | `RateLimitHz` | 10 | Cap on motor writes per second. The BLE link is the scarce resource. |
@@ -187,9 +185,14 @@ speedometer at all. The cost is that its only BLE backends are WinRT, a BlueGiga
 BLED112 dongle and Xamarin, which is why this runs on Windows rather than on a Pi.
 
 **One arbiter.** Input sources only ever *request*; a single `SpeedArbiter` owns
-the setpoint and applies deadzone, cap, deadband mapping, ramp, rate limit and
-change detection. It is pure — no BLE, no timers, no threads — so all of those
-rules are tested without a train.
+the setpoint and applies deadzone, cap, deadband mapping, rate limit and change
+detection. It is pure — no BLE, no timers, no threads — so all of those rules
+are tested without a train.
+
+**Power is a pure function of trigger position.** There is no acceleration ramp.
+One was built and removed: with an analog trigger your finger already is the
+ramp, and a time term only makes the throttle feel mushy and unpredictable. The
+rate limit decides how *often* a value is sent, never what it is.
 
 **Safety.** The motor stops when the controller disappears, when the BLE link
 goes quiet, and on shutdown. Losing an input device is treated as a stop
