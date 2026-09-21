@@ -8,6 +8,7 @@ public sealed class DuploTrainOptions
     public TrainOptions Train { get; set; } = new();
     public MotionOptions Motion { get; set; } = new();
     public InputOptions Input { get; set; } = new();
+    public SessionOptions Session { get; set; } = new();
 
     public void Validate()
     {
@@ -15,6 +16,18 @@ public sealed class DuploTrainOptions
         Motion.Validate();
         Input.Validate();
     }
+}
+
+public sealed class SessionOptions
+{
+    /// <summary>Stop Windows blanking the display or idling the machine while
+    /// the app runs.
+    ///
+    /// The point is the lock screen: once locked, it receives the gamepad too
+    /// and drives its on-screen keyboard with it, and no user-session process
+    /// can take that away. Preventing the idle lock is the only lever there is.
+    /// An explicit Win+L still locks.</summary>
+    public bool KeepDisplayAwake { get; set; } = true;
 }
 
 public sealed class TrainOptions

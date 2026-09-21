@@ -12,8 +12,11 @@ public static class ServiceCollectionExtensions
     /// the physical input devices. Everything else lives in DuploTrain.Core so it
     /// stays testable off Windows.</summary>
     public static IServiceCollection AddDuploTrainWindows(
-        this IServiceCollection services, InputOptions input)
+        this IServiceCollection services, InputOptions input, SessionOptions session)
     {
+        if (session.KeepDisplayAwake)
+            services.AddHostedService<KeepDisplayAwakeService>();
+
         services
             .AddPoweredUp()
             .AddWinRTBluetooth();

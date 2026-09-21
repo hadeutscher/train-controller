@@ -40,7 +40,7 @@ catch (Exception ex)
     return 1;
 }
 
-builder.Services.AddDuploTrainWindows(options.Input);
+builder.Services.AddDuploTrainWindows(options.Input, options.Session);
 
 var host = builder.Build();
 
