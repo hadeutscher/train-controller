@@ -33,8 +33,41 @@ always-on child-facing control is wanted later, that is the Pi option and it
 targets the *other* train — the two stacks can coexist, since each drives its own
 hub.
 
-> The Windows PC is **not** the machine this repo is being developed on. Every
-> step below states where it runs.
+## Status
+
+All milestones are complete. This document is kept for the reasoning behind the
+decisions, not as a task list.
+
+| Milestone | State |
+|---|---|
+| 0 — prove the PC can drive the train | **done** — all six probe steps passed on real hardware |
+| 1 — core train wrapper, arbiter, config | **done** |
+| 2 — Xbox controller | **done**, after two real-hardware fixes (below) |
+| 3 — README and CI | **done** |
+
+What real hardware changed, none of which was predictable from the desk:
+
+- `Windows.Gaming.Input` enumerates pads in a console app and then returns
+  **empty readings** — its input stack wants a window and message pump. Switched
+  to XInput, kept the WinRT path behind config.
+- XInput must be read from **all four user slots**, not slot 0. Windows assigns
+  per device and a reconnected pad lands elsewhere.
+- DUPLO motors have a **large deadband**: below ~30 they hum. Power is mapped
+  into `MinPower..MaxSpeed`, and the acceleration ramp starts at the breakaway
+  power rather than zero.
+- The host stopped cleanly but the **process would not exit**, because the WinRT
+  bluetooth stack leaves threads behind. The app now disposes the host to flush
+  logs and then terminates.
+- Config was read from the **working directory**, so `appsettings.json` beside
+  the dll was ignored. Rooted at the binary now.
+
+Deliberately not built: **mouse control** (needs a message-only window and a
+`WM_INPUT` hook — disproportionate for a third input device) and anything
+MQTT or Home Assistant related.
+
+> The Windows PC and the machine hosting the Linux dev VM turned out to be the
+> same box, so "copy to the target" is a transfer between a VM and its own host.
+> Every step below still states where it runs.
 
 ## Development environment
 
@@ -238,12 +271,10 @@ Default mapping, all configurable:
 - Optional, only if wanted: run under `Microsoft.Extensions.Hosting.WindowsServices`
   via `UseWindowsService()` so it starts with the PC.
 
-**Mouse control is deferred and I want to flag it rather than quietly drop it.**
-On Linux `evdev` gives keyboard, mouse and pad through one API; on Windows the
-mouse wheel needs a message-only window and a `WM_INPUT` hook, which is
-disproportionate machinery for a tertiary control. It is in the brief, so if you
-want it, say so and I will build it — I just would not spend the complexity by
-default.
+**Mouse control was dropped by decision.** On Linux `evdev` gives keyboard,
+mouse and pad through one API; on Windows the mouse wheel needs a message-only
+window and a `WM_INPUT` hook, which is disproportionate machinery for a tertiary
+control. It was in the original brief and is explicitly out of scope now.
 
 ## Layout
 

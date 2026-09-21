@@ -1,0 +1,47 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    # Ubuntu deliberately: the Windows targets cross-build from Linux, which is
+    # the only dev environment this project has. Keeping CI on Linux means a
+    # change that breaks the cross-build is caught here rather than on the box
+    # with the train attached.
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Test
+        run: dotnet test test/DuploTrain.Tests -c Release --nologo
+
+      - name: Build the probe
+        # Not shipped, but it must keep compiling or it rots and is useless the
+        # one time a Bluetooth problem needs diagnosing.
+        run: dotnet build src/DuploTrain.Probe -c Release --nologo
+
+      - name: Publish
+        run: dotnet publish src/DuploTrain.App -c Release -o out --nologo
+
+      - name: Fail if appsettings.json was not published
+        # Without it the app silently falls back to code defaults, which is
+        # exactly the sort of thing nobody notices until the speed cap is wrong.
+        run: test -f out/appsettings.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: duplo-train
+          path: out/
+          if-no-files-found: error
